@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+'use strict';
+
+var fs         = require('fs');
+var split      = require('split');
+var program    = require('commander');
+var through    = require('through2');
+var filter     = require('through2-filter');
+var JSONStream = require('JSONStream');
+var moment     = require('moment');
+
+program
+  .version('0.0.1')
+  .option('-t, --type [type]', 'The type of log message')
+  .option('-f --filename [filename]', 'Specify the output filename')
+  .parse(process.argv);
+
+var writer;
+if (program.filename) {
+    writer = fs.createWriteStream(program.filename, { flags: 'a' });
+}
+
+process.stdin
+    .pipe(split())
+    .pipe(filter(function(chunk) {
+        return !!chunk.toString('utf-8');
+    }))
+    .pipe(through(function(chunk, enc, done) {
+        chunk = chunk.toString('utf-8');
+        if(chunk[0] === '{') {
+            return done(null, chunk);
+        }
+
+        var obj = { message: chunk, type: program.type };
+        obj['@timestamp'] = moment().toISOString();
+        return done(null, JSON.stringify(obj));
+    }))
+    .pipe(JSONStream.parse())
+    .pipe(JSONStream.stringify(false))
+    .pipe(split())
+    .pipe(through(function(chunk, enc, done) {
+        chunk = chunk.toString('utf-8').replace(/\0/g, '').replace(/\^\@/g, '') + '\n';
+        process.stdout.write(chunk);
+        if (writer) writer.write(chunk);
+        done();
+    }));
