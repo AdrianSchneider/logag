@@ -37,10 +37,12 @@ process.stdin
     }))
     .pipe(JSONStream.parse())
     .pipe(JSONStream.stringify(false))
-    .pipe(split())
     .pipe(through(function(chunk, enc, done) {
         chunk = chunk.toString('utf-8').replace(/\0/g, '').replace(/\^\@/g, '') + '\n';
         process.stdout.write(chunk);
         if (writer) writer.write(chunk);
         done();
+    }))
+    .pipe(filter(function(chunk) {
+        return !!chunk.toString('utf-8');
     }));
